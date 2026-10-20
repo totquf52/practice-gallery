@@ -1,0 +1,34 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": [
+              "C:/Users/user/Desktop/my_service/.claude/hooks/prd_lock.py"
+            ],
+            "timeout": 10,
+            "statusMessage": "PRD 자물쇠 확인 중"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|NotebookEdit|Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": [
+              "C:/Users/user/Desktop/my_service/.claude/hooks/block-docs.py"
+            ],
+            "timeout": 10,
+            "statusMessage": "원본 자물쇠 확인 중"
+          }
+        ]
+      }
+    ]
+  }
+}
