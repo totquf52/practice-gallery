@@ -104,6 +104,27 @@ def ask_gpt():
     return res.output_text, ""
 
 
+def answer_ok(text):
+    # "[확실하지 않은 내용이에요]"로 시작하면 줄 수·글자 수와 상관없이 통과시킨다
+    text = text.strip()
+    if text.startswith("[확실하지 않은 내용이에요]"):
+        return True
+    # 빈 줄 없이 정확히 세 줄이고, 300자를 넘지 않아야 통과한다
+    lines = text.split("\n")
+    return len(lines) == 3 and all(line.strip() for line in lines) and len(text) <= 300
+
+
+def ask_gpt_checked():
+    # 점검에 걸리면 한 번 더 묻고, 두 번 다 걸리면 답 대신 다시 시도해 달라는 알림을 돌려준다
+    for _ in range(2):
+        answer, error = ask_gpt()
+        if error:
+            return None, error
+        if answer_ok(answer):
+            return answer, ""
+    return None, "다시 시도해 주세요"
+
+
 def save_chat(question, answer):
     # 물은 말과 받은 답을 Supabase 의 chat_logs 표에 한 줄로 남긴다. 못 남기면 그 까닭을 돌려준다
     if not supabase_url or not supabase_key:
@@ -206,7 +227,7 @@ def show_chatbot():
                 show_message(role, text)
             if st.session_state.chat_waiting:
                 with st.spinner("답을 쓰는 중이에요"):
-                    answer, error = ask_gpt()
+                    answer, error = ask_gpt_checked()
                 message = ("notice", error) if error else ("assistant", answer)
                 show_message(*message)
                 st.session_state.chat_messages.append(message)
