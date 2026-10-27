@@ -5,6 +5,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import openai
 import requests
 import streamlit as st
 import streamlit.components.v1 as components
@@ -12,10 +13,8 @@ from dotenv import load_dotenv
 from PIL import Image
 
 load_dotenv(Path(__file__).parent / ".env")
-gemini_key = (os.getenv("GEMINI_API_KEY") or "").strip()
-gemini_url = "https://generativelanguage.googleapis.com/v1beta/interactions"
-gemini_model = "gemini-3.8-flash"
-spare_model = "gemini-3.5-flash-lite"
+gpt_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+gpt_model = "gpt-6-luna"
 prd_text = (Path(__file__).parent / "PRD.md").read_text(encoding="utf-8")
 
 supabase_url = (os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
@@ -85,39 +84,24 @@ def show_message(role, text):
             copy_button(text)
 
 
-def ask_gemini(text):
-    # 첫 모델이 바쁘거나(503) 30초 안에 답이 없을 때만 다음 모델로 한 번 더 묻는다
-    body = {"input": text, "system_instruction": rule}
-    if st.session_state.chat_last_id:
-        body["previous_interaction_id"] = st.session_state.chat_last_id
-    for model, wait in [(gemini_model, 30), (spare_model, 60)]:
-        try:
-            res = requests.post(
-                gemini_url,
-                headers={"x-goog-api-key": gemini_key, "Content-Type": "application/json"},
-                json={**body, "model": model},
-                timeout=wait,
-            )
-        except requests.Timeout:
-            if model == spare_model:
-                raise
-            continue
-        if res.status_code != 503:
-            break
-    if not res.ok:
-        return None, f"Gemini 가 답하지 못했습니다 ({res.status_code}) : {res.text[:300]}"
-    data = res.json()
-    texts = [
-        block.get("text", "")
-        for step in data.get("steps", [])
-        if step.get("type") == "model_output"
-        for block in step.get("content", [])
-        if block.get("type") == "text"
+def ask_gpt():
+    # 지금까지 주고받은 말을 통째로 함께 보내 앞 대화를 이어 가게 한다
+    # 바쁘거나(429·5xx) 늦을 때는 도구가 알아서 두 번 더 묻는다
+    history = [
+        {"role": role, "content": text}
+        for role, text in st.session_state.chat_messages
+        if role in ("user", "assistant")
     ]
-    if not texts:
-        return None, "Gemini 답에 글이 없습니다"
-    st.session_state.chat_last_id = data.get("id")
-    return "".join(texts), ""
+    client = openai.OpenAI(api_key=gpt_key, timeout=60)
+    try:
+        res = client.responses.create(model=gpt_model, instructions=rule, input=history)
+    except openai.APIStatusError as e:
+        return None, f"GPT 가 답하지 못했습니다 ({e.status_code}) : {e.message[:300]}"
+    except openai.APIConnectionError as e:
+        return None, f"GPT 에 닿지 못했습니다 : {e}"
+    if not res.output_text:
+        return None, "GPT 답에 글이 없습니다"
+    return res.output_text, ""
 
 
 def save_chat(question, answer):
@@ -189,8 +173,6 @@ def send():
 def show_chatbot():
     if "chat_messages" not in st.session_state:
         st.session_state.chat_messages = []
-    if "chat_last_id" not in st.session_state:
-        st.session_state.chat_last_id = None
     if "chat_waiting" not in st.session_state:
         st.session_state.chat_waiting = None
 
@@ -216,18 +198,15 @@ def show_chatbot():
     with st.container(key="chatbot"):
         with st.popover("챗봇"):
             st.markdown("**클래스플로우 도우미**")
-            if not gemini_key:
-                st.text(".env 파일에 GEMINI_API_KEY 값을 넣어 주세요")
+            if not gpt_key:
+                st.text(".env 파일에 OPENAI_API_KEY 값을 넣어 주세요")
                 return
             show_message("notice", "안녕하세요! 클래스플로우에 대해 궁금한 걸 물어봐 주세요.")
             for role, text in st.session_state.chat_messages:
                 show_message(role, text)
             if st.session_state.chat_waiting:
                 with st.spinner("답을 쓰는 중이에요"):
-                    try:
-                        answer, error = ask_gemini(st.session_state.chat_waiting)
-                    except requests.RequestException as e:
-                        answer, error = None, f"Gemini 에 닿지 못했습니다 : {e}"
+                    answer, error = ask_gpt()
                 message = ("notice", error) if error else ("assistant", answer)
                 show_message(*message)
                 st.session_state.chat_messages.append(message)
