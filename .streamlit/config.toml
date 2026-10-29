@@ -1,0 +1,20 @@
+[server]
+# static 폴더의 글꼴 파일을 화면에서 쓸 수 있게 내준다
+enableStaticServing = true
+
+# 화면 색 : 배경 #150d0e, 글자 #e4cad5, 강조 #ef5593
+# 강조 색은 누른 칸·고른 탭·넣는 칸처럼 "지금 고른 것"에만 쓰고, 나머지는 차분한 색으로 둔다
+[theme]
+base = "dark"
+primaryColor = "#ef5593"
+backgroundColor = "#150d0e"
+secondaryBackgroundColor = "#221619"
+textColor = "#e4cad5"
+borderColor = "#3a2a30"
+baseRadius = "0.75rem"
+buttonRadius = "full"
+showSidebarBorder = false
+
+[theme.sidebar]
+backgroundColor = "#1b1114"
+secondaryBackgroundColor = "#2a1b20"
