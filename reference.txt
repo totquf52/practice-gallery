@@ -1,0 +1,286 @@
+You are given a task to integrate an existing React component into the codebase.
+
+The codebase should support:
+- shadcn project structure
+- Tailwind CSS
+- TypeScript
+
+If it doesn't, provide instructions on how to set up the project via shadcn CLI, install Tailwind, or TypeScript.
+
+Determine the default path for components and styles.
+If the default path for components is not /components/ui, provide instructions on why it's important to create this folder.
+
+Copy-paste these components to the /components/ui folder:
+
+```tsx
+// src/components/pin-dock-list.tsx
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, LayoutGroup, motion, type Variants } from "motion/react";
+import { Pin } from "@solar-icons/react";
+import { cn } from "@/lib/cn";
+
+/* ------------------------------------------------------------------ */
+/*  PinDockList                                                        */
+/* ------------------------------------------------------------------ */
+
+export interface PinDockItem {
+  id: string;
+  name: string;
+  /** e.g. "Category · Detail" */
+  subtitle: string;
+  icon: Icon;
+}
+
+interface PinDockListProps {
+  items: PinDockItem[];
+  className?: string;
+}
+
+const ITEM_VARIANTS: Variants = {
+  hidden: { opacity: 0, scale: 0.96, y: -6 },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    y: 0,
+    transition: { type: "spring", stiffness: 380, damping: 20, mass: 0.8 },
+  },
+  exit: {
+    opacity: 0,
+    scale: 0.96,
+    y: -4,
+    transition: { duration: 0.18, ease: "easeIn" },
+  },
+};
+
+const HEADING_VARIANTS: Variants = {
+  hidden: { opacity: 0, y: -6 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { type: "spring", stiffness: 400, damping: 22 },
+  },
+  exit: { opacity: 0, y: -4, transition: { duration: 0.15, ease: "easeIn" } },
+};
+
+function ItemCard({
+  item,
+  pinned,
+  onToggle,
+}: {
+  item: PinDockItem;
+  pinned: boolean;
+  onToggle: () => void;
+}) {
+  const ItemIcon = item.icon;
+  return (
+    <motion.div
+      layoutId={item.id}
+      layout
+      variants={ITEM_VARIANTS}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+      className={cn(
+        "flex items-center gap-3 rounded-2xl border px-3 py-3.5",
+        pinned
+          ? "border-sky-200/80 bg-sky-50 dark:border-sky-400/20 dark:bg-sky-950/25"
+          : "border-transparent bg-zinc-100 dark:bg-zinc-900",
+      )}
+    >
+      <div className="flex size-11 flex-shrink-0 items-center justify-center rounded-xl bg-white text-zinc-600 dark:bg-zinc-950 dark:text-zinc-300">
+        <ItemIcon size={20} weight="Bold" />
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[15px] font-semibold leading-tight text-zinc-900 dark:text-zinc-100">
+          {item.name}
+        </p>
+        <p className="truncate text-[13px] font-medium text-zinc-500">{item.subtitle}</p>
+      </div>
+
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-label={pinned ? `Unpin ${item.name}` : `Pin ${item.name}`}
+        className={cn(
+          "flex size-8 flex-shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors duration-200 active:scale-[0.95]",
+          pinned
+            ? "bg-sky-500 text-white hover:bg-sky-600"
+            : "bg-zinc-200/70 text-zinc-500 hover:bg-zinc-300/70 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700",
+        )}
+      >
+        <Pin
+          size={15}
+          weight="Bold"
+          className={cn("transition-transform duration-200", pinned && "-rotate-45")}
+        />
+      </button>
+    </motion.div>
+  );
+}
+
+/**
+ * A list whose items glide between a Pinned section and the main list:
+ * shared layoutIds move the card itself, popLayout re-flows the rows, and
+ * each section heading mounts and unmounts only after its items finish
+ * exiting — a two-stage AnimatePresence handoff.
+ * @param {PinDockItem[]} items - Rows with id, name, subtitle, icon [Required]
+ */
+export function PinDockList({ items, className }: PinDockListProps) {
+  const [pinnedIds, setPinnedIds] = useState<ReadonlySet<string>>(new Set());
+  const [showPinned, setShowPinned] = useState(false);
+  const [showAll, setShowAll] = useState(true);
+  const pinnedCount = useRef(0);
+  const unpinnedCount = useRef(0);
+
+  const togglePin = (id: string) => {
+    setPinnedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const pinned = items.filter((i) => pinnedIds.has(i.id));
+  const unpinned = items.filter((i) => !pinnedIds.has(i.id));
+  pinnedCount.current = pinned.length;
+  unpinnedCount.current = unpinned.length;
+
+  useEffect(() => {
+    if (pinned.length > 0) setShowPinned(true);
+  }, [pinned.length]);
+  useEffect(() => {
+    if (unpinned.length > 0) setShowAll(true);
+  }, [unpinned.length]);
+
+  return (
+    <LayoutGroup>
+      <motion.div layout className={cn("flex w-full flex-col gap-1", className)}>
+        <AnimatePresence onExitComplete={() => setShowPinned(false)}>
+          {showPinned && (
+            <motion.div
+              key="pinned-section"
+              layout
+              variants={HEADING_VARIANTS}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="flex flex-col gap-1"
+            >
+              <motion.p
+                layout="position"
+                className="px-1 pb-0.5 pt-1 text-[13px] font-medium text-zinc-500"
+              >
+                Pinned
+              </motion.p>
+              <AnimatePresence
+                mode="popLayout"
+                onExitComplete={() => {
+                  if (pinnedCount.current === 0) setShowPinned(false);
+                }}
+              >
+                {pinned.map((item) => (
+                  <ItemCard key={item.id} item={item} pinned onToggle={() => togglePin(item.id)} />
+                ))}
+              </AnimatePresence>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence onExitComplete={() => setShowAll(false)}>
+          {showAll && (
+            <motion.div
+              key="all-section"
+              layout
+              variants={HEADING_VARIANTS}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="flex flex-col gap-1"
+            >
+              <motion.p
+                layout="position"
+                className={cn(
+                  "px-1 pb-0.5 text-[13px] font-medium text-zinc-500",
+                  pinned.length > 0 ? "pt-3" : "pt-1",
+                )}
+              >
+                All workspaces
+              </motion.p>
+              <AnimatePresence
+                mode="popLayout"
+                onExitComplete={() => {
+                  if (unpinnedCount.current === 0) setShowAll(false);
+                }}
+              >
+                {unpinned.map((item) => (
+                  <ItemCard
+                    key={item.id}
+                    item={item}
+                    pinned={false}
+                    onToggle={() => togglePin(item.id)}
+                  />
+                ))}
+              </AnimatePresence>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    </LayoutGroup>
+  );
+}
+```
+
+```tsx
+// src/components/pin-dock-list-demo.tsx
+"use client";
+
+import { Bolt, ChatRound, Folder, GraphUp, Pin, Widget } from "@solar-icons/react";
+
+import {
+  PinDockList,
+} from "@/components/ui/pin-dock-list";
+
+/* ------------------------------------------------------------------ */
+/*  Demo                                                               */
+/* ------------------------------------------------------------------ */
+
+const ITEMS: PinDockItem[] = [
+  { id: "design-system", name: "Design system", subtitle: "Library · 214 components", icon: Widget },
+  { id: "launch-week", name: "Launch week", subtitle: "Campaign · ships Friday", icon: Bolt },
+  { id: "support-inbox", name: "Support inbox", subtitle: "Queue · 12 open threads", icon: ChatRound },
+  { id: "usage-report", name: "Usage report", subtitle: "Analytics · updated hourly", icon: GraphUp },
+  { id: "asset-vault", name: "Asset vault", subtitle: "Storage · 4.2 GB", icon: Folder },
+];
+
+/**
+ * Pin dock list demo — pin a workspace and the card glides up into its own
+ * section; unpin and it slides back into place.
+ */
+export default function PinDockListDemo() {
+  return (
+    <div className="flex h-dvh w-full items-center justify-center bg-white p-6 dark:bg-zinc-950">
+      <PinDockList items={ITEMS} className="max-w-md" />
+    </div>
+  );
+}
+```
+
+Install NPM dependencies:
+```bash
+motion @solar-icons/react clsx tailwind-merge
+```
+
+Implementation Guidelines
+
+1. The glide between sections is one `LayoutGroup` + a stable `layoutId` per item: pinning re-renders the card under the other section's AnimatePresence, and Motion animates the SAME element between the two layout slots — no clones, no measure code.
+2. Section headings are a two-stage handoff: each section's rows live in an inner `AnimatePresence mode="popLayout"` whose `onExitComplete` checks a count ref and only THEN unmounts the section wrapper (outer AnimatePresence animates the heading away). Without the ref check the heading would vanish while the last row is still exiting.
+3. Counts are read through refs (`pinnedCount.current = pinned.length` during render) because `onExitComplete` fires after state has already moved on — closing over the stale array would strand empty sections on screen.
+4. The pinned state is one accent within neutrals: sky border/wash on the card, solid sky pin button, and the pin glyph rotates -45° when active. Everything else stays zinc so the accent reads as state, not decoration.
+
+Icon license note: this component uses the Solar icon set via `@solar-icons/react` (icons by 480 Design, CC BY 4.0 — keep an attribution notice in your project, e.g. in your licenses page or README).
+
+Remember: Do not change the component's code unless it's required to integrate or the user asks you to.
