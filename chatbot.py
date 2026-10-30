@@ -12,7 +12,6 @@ from PIL import Image
 
 from read_key import read_key
 
-claude_key = read_key("ANTHROPIC_API_KEY")
 claude_model = "claude-opus-5-5"
 prd_text = (Path(__file__).parent / "PRD.md").read_text(encoding="utf-8")
 
@@ -91,7 +90,7 @@ def ask_claude():
         for role, text in st.session_state.chat_messages
         if role in ("user", "assistant")
     ]
-    client = anthropic.Anthropic(api_key=claude_key, timeout=60)
+    client = anthropic.Anthropic(api_key=read_key("ANTHROPIC_API_KEY"), timeout=60)
     try:
         # 안전 점검에 걸려 답을 못 하면 다른 모델이 이어서 답하게 한다(fallbacks)
         res = client.beta.messages.create(
@@ -228,8 +227,9 @@ def show_chatbot():
     with st.container(key="chatbot"):
         with st.popover("챗봇"):
             st.markdown("**클래스플로우 도우미**")
-            if not claude_key:
-                st.text(".env 파일에 ANTHROPIC_API_KEY 값을 넣어 주세요")
+            # 이 파일은 앱이 켜질 때 한 번만 읽히므로, 나중에 넣은 키도 보이게 그때그때 읽는다
+            if not read_key("ANTHROPIC_API_KEY"):
+                st.text(".env 파일이나 Secrets 에 ANTHROPIC_API_KEY 값을 넣어 주세요")
                 return
             show_message("notice", "안녕하세요! 클래스플로우에 대해 궁금한 걸 물어봐 주세요.")
             for role, text in st.session_state.chat_messages:
