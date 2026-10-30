@@ -1,0 +1,8 @@
+altair
+openai
+pandas
+Pillow
+pydeck
+python-dotenv
+requests
+streamlit
