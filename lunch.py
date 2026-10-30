@@ -1,5 +1,3 @@
-import os
-from pathlib import Path
 from urllib.parse import quote
 
 import altair as alt
@@ -7,12 +5,12 @@ import pandas as pd
 import pydeck as pdk
 import requests
 import streamlit as st
-from dotenv import load_dotenv
+
+from read_key import read_key
 
 st.set_page_config(page_title="남양주 맛집 대시보드", layout="wide")
 
-load_dotenv(Path(__file__).parent / ".env")
-kakao_key = (os.getenv("KAKAO_REST_API_KEY") or "").strip()
+kakao_key = read_key("KAKAO_REST_API_KEY")
 headers = {"Authorization": f"KakaoAK {kakao_key}"}
 keyword_url = "https://dapi.kakao.com/v2/local/search/keyword.json"
 address_url = "https://dapi.kakao.com/v2/local/search/address.json"

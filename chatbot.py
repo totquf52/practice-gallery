@@ -1,24 +1,23 @@
 import base64
 import io
 import json
-import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-import openai
+import anthropic
 import requests
 import streamlit as st
 import streamlit.components.v1 as components
-from dotenv import load_dotenv
 from PIL import Image
 
-load_dotenv(Path(__file__).parent / ".env")
-gpt_key = (os.getenv("OPENAI_API_KEY") or "").strip()
-gpt_model = "gpt-6-luna"
+from read_key import read_key
+
+claude_key = read_key("ANTHROPIC_API_KEY")
+claude_model = "claude-opus-5-5"
 prd_text = (Path(__file__).parent / "PRD.md").read_text(encoding="utf-8")
 
-supabase_url = (os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
-supabase_key = (os.getenv("SUPABASE_KEY") or "").strip()
+supabase_url = read_key("SUPABASE_URL").rstrip("/")
+supabase_key = read_key("SUPABASE_KEY")
 chat_table_url = f"{supabase_url}/rest/v1/chat_logs"
 supabase_headers = {"apikey": supabase_key, "Authorization": f"Bearer {supabase_key}"}
 korea_time = timezone(timedelta(hours=9))
@@ -84,7 +83,7 @@ def show_message(role, text):
             copy_button(text)
 
 
-def ask_gpt():
+def ask_claude():
     # 지금까지 주고받은 말을 통째로 함께 보내 앞 대화를 이어 가게 한다
     # 바쁘거나(429·5xx) 늦을 때는 도구가 알아서 두 번 더 묻는다
     history = [
@@ -92,16 +91,26 @@ def ask_gpt():
         for role, text in st.session_state.chat_messages
         if role in ("user", "assistant")
     ]
-    client = openai.OpenAI(api_key=gpt_key, timeout=60)
+    client = anthropic.Anthropic(api_key=claude_key, timeout=60)
     try:
-        res = client.responses.create(model=gpt_model, instructions=rule, input=history)
-    except openai.APIStatusError as e:
-        return None, f"GPT 가 답하지 못했습니다 ({e.status_code}) : {e.message[:300]}"
-    except openai.APIConnectionError as e:
-        return None, f"GPT 에 닿지 못했습니다 : {e}"
-    if not res.output_text:
-        return None, "GPT 답에 글이 없습니다"
-    return res.output_text, ""
+        # 안전 점검에 걸려 답을 못 하면 다른 모델이 이어서 답하게 한다(fallbacks)
+        res = client.beta.messages.create(
+            model=claude_model,
+            max_tokens=16000,
+            betas=["server-side-fallback-2026-07-01"],
+            fallbacks="default",
+            output_config={"effort": "low"},
+            system=rule,
+            messages=history,
+        )
+    except anthropic.APIStatusError as e:
+        return None, f"클로드가 답하지 못했습니다 ({e.status_code}) : {e.message[:300]}"
+    except anthropic.APIConnectionError as e:
+        return None, f"클로드에 닿지 못했습니다 : {e}"
+    answer = "".join(block.text for block in res.content if block.type == "text")
+    if not answer:
+        return None, "클로드 답에 글이 없습니다"
+    return answer, ""
 
 
 def answer_ok(text):
@@ -114,10 +123,10 @@ def answer_ok(text):
     return len(lines) == 3 and all(line.strip() for line in lines) and len(text) <= 300
 
 
-def ask_gpt_checked():
+def ask_claude_checked():
     # 점검에 걸리면 한 번 더 묻고, 두 번 다 걸리면 답 대신 다시 시도해 달라는 알림을 돌려준다
     for _ in range(2):
-        answer, error = ask_gpt()
+        answer, error = ask_claude()
         if error:
             return None, error
         if answer_ok(answer):
@@ -219,15 +228,15 @@ def show_chatbot():
     with st.container(key="chatbot"):
         with st.popover("챗봇"):
             st.markdown("**클래스플로우 도우미**")
-            if not gpt_key:
-                st.text(".env 파일에 OPENAI_API_KEY 값을 넣어 주세요")
+            if not claude_key:
+                st.text(".env 파일에 ANTHROPIC_API_KEY 값을 넣어 주세요")
                 return
             show_message("notice", "안녕하세요! 클래스플로우에 대해 궁금한 걸 물어봐 주세요.")
             for role, text in st.session_state.chat_messages:
                 show_message(role, text)
             if st.session_state.chat_waiting:
                 with st.spinner("답을 쓰는 중이에요"):
-                    answer, error = ask_gpt_checked()
+                    answer, error = ask_claude_checked()
                 message = ("notice", error) if error else ("assistant", answer)
                 show_message(*message)
                 st.session_state.chat_messages.append(message)

@@ -1,17 +1,15 @@
-import os
 from pathlib import Path
 
 import requests
 import streamlit as st
-from dotenv import load_dotenv
 
 from chatbot import show_chatbot
+from read_key import read_key
 
 st.set_page_config(page_title="유라의 사이트", layout="wide")
 
-load_dotenv(Path(__file__).parent / ".env")
-supabase_url = (os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
-supabase_key = (os.getenv("SUPABASE_KEY") or "").strip()
+supabase_url = read_key("SUPABASE_URL").rstrip("/")
+supabase_key = read_key("SUPABASE_KEY")
 table_url = f"{supabase_url}/rest/v1/submissions"
 headers = {"apikey": supabase_key, "Authorization": f"Bearer {supabase_key}"}
 

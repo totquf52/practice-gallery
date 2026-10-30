@@ -1,16 +1,14 @@
-import os
 from datetime import date
-from pathlib import Path
 
 import requests
 import streamlit as st
-from dotenv import load_dotenv
+
+from read_key import read_key
 
 st.set_page_config(page_title="구독 정리함")
 
-load_dotenv(Path(__file__).parent / ".env")
-url = (os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
-key = (os.getenv("SUPABASE_KEY") or "").strip()
+url = read_key("SUPABASE_URL").rstrip("/")
+key = read_key("SUPABASE_KEY")
 
 st.title("구독 정리함")
 

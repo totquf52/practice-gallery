@@ -1,5 +1,5 @@
 altair
-openai
+anthropic
 pandas
 Pillow
 pydeck
