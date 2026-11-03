@@ -341,6 +341,7 @@ with st.sidebar:
 
 if st.session_state.screen == 1:
     st.title("클래스플로우")
+    st.caption("By. YuniqCoding")
     st.caption("옆 칸에 실습 개수를 넣고 [만들기]를 눌러 주세요")
 
 else:
@@ -356,6 +357,7 @@ else:
 
             with left:
                 st.title(f"실습 {board} 게시판")
+                st.caption("By. YuniqCoding")
                 if board <= len(titles):
                     st.text(titles[board - 1])
 
@@ -383,6 +385,7 @@ else:
                 st.title("실습 1 게시판")
             else:
                 st.title(f"실습 1~{count} 게시판")
+            st.caption("By. YuniqCoding")
 
             # 화면을 옮기는 버튼은 격자 위 한 줄에 나란히 두어 내리지 않고 보이게 한다
             first, second, _ = st.columns([1, 1, 6])
@@ -411,6 +414,7 @@ else:
         # 실습 제목 붙이기 : 왼쪽에 제목 넣는 칸, 오른쪽에 번호·제목 목록
         with title_tab:
             st.title("실습 제목 붙이기")
+            st.caption("By. YuniqCoding")
             left, right = st.columns(2)
 
             with left:
