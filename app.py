@@ -71,15 +71,19 @@ def opened_board():
 
 
 def upload(number):
+    owner = st.session_state.owner_input.strip()
     author = st.session_state.author_input.strip()
     content = st.session_state.content_input.strip()
+    if not owner:
+        st.session_state.upload_error = "이름을 넣어 주세요"
+        return
     if not author:
         st.session_state.upload_error = "별명을 넣어 주세요"
         return
     if not content:
         st.session_state.upload_error = "글을 넣어 주세요"
         return
-    row = {"practice_no": number, "author": author, "content": content}
+    row = {"practice_no": number, "author": author, "content": content, "owner": owner}
     try:
         answer = requests.post(table_url, headers=headers, json=row, timeout=10)
     except requests.RequestException as error:
@@ -92,10 +96,15 @@ def upload(number):
         st.session_state.upload_error = f"글을 쌓지 못했습니다 ({answer.status_code}) : {answer.text}"
 
 
-def show_submissions(number):
+def show_submissions(number, owner):
+    # 이름이 비어 있으면 아무 글도 불러오지 않는다
+    if not owner:
+        st.markdown(":red[이름을 넣어 주세요]")
+        return
     params = {
         "select": "author,content,created_at",
         "practice_no": f"eq.{number}",
+        "owner": f"eq.{owner}",
         "order": "created_at.desc",
     }
     try:
@@ -335,6 +344,9 @@ with st.sidebar:
 
     st.button("만들기", on_click=make)
 
+    # 게시판에 글을 올리고 볼 때 쓰는 이름. 옆 칸에 두어 게시판을 옮겨 다녀도 남아 있게 한다
+    st.text_input("이름", max_chars=20, placeholder="예: 홍길동", key="owner_input")
+
     st.text("받은 문의를 붙여 넣으면 답변 초안을 만들어 줍니다.")
 
     st.button("소개 화면으로", on_click=to_landing)
@@ -375,7 +387,7 @@ else:
 
             if supabase_url and supabase_key:
                 with right:
-                    show_submissions(board)
+                    show_submissions(board, st.session_state.owner_input.strip())
 
     elif st.session_state.screen == 2:
         with grid_tab:
