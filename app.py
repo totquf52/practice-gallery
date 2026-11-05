@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pandas as pd
 import requests
 import streamlit as st
 
@@ -70,12 +71,17 @@ def opened_board():
     return None
 
 
+def my_email():
+    # 들어온 사람의 구글 계정 메일. 글 주인(owner)으로 쓰므로 소문자로 맞춘다
+    return (st.user.get("email") or "").strip().lower()
+
+
 def upload(number):
-    owner = st.session_state.owner_input.strip()
+    owner = my_email()
     author = st.session_state.author_input.strip()
     content = st.session_state.content_input.strip()
     if not owner:
-        st.session_state.upload_error = "이름을 넣어 주세요"
+        st.session_state.upload_error = "구글 계정 메일을 알 수 없어 글을 올리지 못했습니다"
         return
     if not author:
         st.session_state.upload_error = "별명을 넣어 주세요"
@@ -96,17 +102,22 @@ def upload(number):
         st.session_state.upload_error = f"글을 쌓지 못했습니다 ({answer.status_code}) : {answer.text}"
 
 
-def show_submissions(number, owner):
-    # 이름이 비어 있으면 아무 글도 불러오지 않는다
-    if not owner:
-        st.markdown(":red[이름을 넣어 주세요]")
-        return
+def show_submissions(number, admin):
+    # 관리자는 이 게시판의 글을 모두 본다. 일반 사용자는 글 주인이 내 메일인 글만 본다
     params = {
-        "select": "author,content,created_at",
+        "select": "author,content,created_at,owner",
         "practice_no": f"eq.{number}",
-        "owner": f"eq.{owner}",
         "order": "created_at.desc",
     }
+    if not admin:
+        owner = my_email()
+        # 메일을 모르면 아무 글도 불러오지 않는다
+        if not owner:
+            st.markdown(":red[구글 계정 메일을 알 수 없어 글을 불러오지 못했습니다]")
+            return
+        params["owner"] = f"eq.{owner}"
+        # 일반 사용자 카드에는 메일 대신 구글 계정 이름을 적는다
+        my_name = st.user.get("name") or owner
     try:
         answer = requests.get(table_url, headers=headers, params=params, timeout=10)
     except requests.RequestException as error:
@@ -119,8 +130,69 @@ def show_submissions(number, owner):
     st.caption(f"모두 {len(rows)}개")
     for index, row in enumerate(rows):
         with st.container(border=True, key=f"post_{index}"):
-            st.caption(f"{row['author']} · {row['created_at'][:10]}")
+            # 관리자는 누구 글인지 알도록 글 주인 메일을 본다
+            who = (row.get("owner") or "주인 없음") if admin else my_name
+            st.caption(f"{who} · {row['author']} · {row['created_at'][:10]}")
             st.text(row["content"])
+
+
+def is_admin():
+    # 관리자 메일 목록은 st.secrets 의 ADMIN_EMAILS 에서만 읽는다
+    # 들어오지 않았거나, 목록이 없거나, 메일이 목록에 없으면 관리자가 아니다
+    if not st.user.is_logged_in:
+        return False
+    email = (st.user.get("email") or "").strip().lower()
+    if not email:
+        return False
+    try:
+        admins = st.secrets.get("ADMIN_EMAILS", [])
+    except Exception:
+        return False
+    if isinstance(admins, str):
+        admins = admins.split(",")
+    return email in {str(admin).strip().lower() for admin in admins}
+
+
+def show_admin():
+    # 화면에 그리기 전에 한 번 더 확인한다. 관리자가 아니면 아무것도 하지 않고 끝낸다
+    if not is_admin():
+        return
+    st.title("관리")
+    st.text("관리자만 보는 화면입니다")
+    show_all_rows()
+
+
+def show_all_rows():
+    # 이 함수도 맨 앞에서 관리자인지 다시 본다. 아니면 표를 불러오지도 않는다
+    if not is_admin():
+        return
+    st.subheader("모든 사람의 줄")
+    if not supabase_url or not supabase_key:
+        st.text(".env 파일에 SUPABASE_URL 과 SUPABASE_KEY 값을 넣어 주세요")
+        return
+    params = {"select": "*", "order": "created_at.desc"}
+    try:
+        answer = requests.get(table_url, headers=headers, params=params, timeout=10)
+    except requests.RequestException as error:
+        st.text(f"Supabase 에 닿지 못했습니다 : {error}")
+        return
+    if not answer.ok:
+        st.text(f"줄을 불러오지 못했습니다 ({answer.status_code}) : {answer.text}")
+        return
+    # 표에서 읽은 값을 그대로 쓴다. 칸을 더하거나 값을 채워 넣지 않는다
+    table = pd.DataFrame(answer.json())
+    st.caption(f"모두 {len(table)}줄")
+    if table.empty:
+        st.text("쌓인 줄이 없습니다")
+        return
+    st.dataframe(table, hide_index=True)
+    # 엑셀에서 한글이 깨지지 않게 utf-8-sig 로 만든다
+    st.download_button(
+        "CSV 파일로 내려받기",
+        data=table.to_csv(index=False).encode("utf-8-sig"),
+        file_name="submissions.csv",
+        mime="text/csv",
+    )
 
 
 def start():
@@ -131,6 +203,12 @@ def to_landing():
     st.session_state.landing = True
     if "board" in st.query_params:
         del st.query_params["board"]
+
+
+def logout():
+    # 다음에 다시 들어와도 첫 화면부터 보이게 되돌린 뒤 구글 계정에서 나간다
+    to_landing()
+    st.logout()
 
 
 HERO_VIDEO = Path(__file__).parent / "static" / "hero.mp4"
@@ -249,8 +327,12 @@ def show_landing():
             unsafe_allow_html=True,
         )
         # 버튼 겉상자는 버튼 크기만큼만 자리를 잡으므로, 가운데 정렬 상자에 넣어 가운데에 둔다
+        # 구글 계정으로 들어오지 않았으면 [시작하기]가 구글 들어가기 화면으로 보낸다
         with st.container(horizontal_alignment="center"):
-            st.button("시작하기", key="start", on_click=start)
+            if st.user.is_logged_in:
+                st.button("시작하기", key="start", on_click=start)
+            else:
+                st.button("시작하기", key="start", on_click=st.login, args=("google",))
 
     # 화면 2 를 본뜬 미리보기 : 실습 20개 게시판 격자, 하나는 눌린 칸처럼 강조한다
     cells = "".join(
@@ -280,7 +362,8 @@ def show_landing():
 
 
 # 처음 열면 첫 화면이 먼저 뜬다. 복사한 게시판 링크로 들어오면 바로 그 게시판을 연다
-if st.session_state.landing and opened_board() is None:
+# 구글 계정으로 들어오지 않았으면 게시판 링크로 와도 첫 화면에서 멈춘다
+if not st.user.is_logged_in or (st.session_state.landing and opened_board() is None):
     show_landing()
     st.stop()
 
@@ -323,9 +406,20 @@ h1 { font-size: 2rem !important; letter-spacing: -0.01em; }
     unsafe_allow_html=True,
 )
 
+# 들어온 사람의 이름을 기능 화면 맨 위에 보여 준다. 이름이 없으면 메일 주소를 쓴다
+with st.container(horizontal=True, vertical_alignment="center"):
+    st.markdown(f"**{st.user.get('name') or st.user.get('email', '')}** 님")
+    st.button("로그아웃", on_click=logout)
+
+admin = is_admin()
+
 board = opened_board()
 if board is not None:
     st.session_state.screen = 2
+elif st.session_state.screen == 4:
+    # 관리 화면(4)은 관리자만 연다. 아니면 원래 화면으로 돌려보낸다
+    if not admin:
+        st.session_state.screen = 1 if st.session_state.count is None else 2
 elif st.session_state.count is None:
     st.session_state.screen = 1
 
@@ -344,14 +438,18 @@ with st.sidebar:
 
     st.button("만들기", on_click=make)
 
-    # 게시판에 글을 올리고 볼 때 쓰는 이름. 옆 칸에 두어 게시판을 옮겨 다녀도 남아 있게 한다
-    st.text_input("이름", max_chars=20, placeholder="예: 홍길동", key="owner_input")
-
     st.text("받은 문의를 붙여 넣으면 답변 초안을 만들어 줍니다.")
 
     st.button("소개 화면으로", on_click=to_landing)
 
-if st.session_state.screen == 1:
+    # 관리자에게만 [관리] 버튼을 보인다
+    if admin:
+        st.button("관리", on_click=go, args=(4,))
+
+if st.session_state.screen == 4 and admin:
+    show_admin()
+
+elif st.session_state.screen == 1:
     st.title("클래스플로우")
     st.caption("By. YuniqCoding")
     st.caption("옆 칸에 실습 개수를 넣고 [만들기]를 눌러 주세요")
@@ -387,7 +485,7 @@ else:
 
             if supabase_url and supabase_key:
                 with right:
-                    show_submissions(board, st.session_state.owner_input.strip())
+                    show_submissions(board, admin)
 
     elif st.session_state.screen == 2:
         with grid_tab:
