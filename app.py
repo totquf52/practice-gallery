@@ -212,6 +212,8 @@ def logout():
 
 
 HERO_VIDEO = Path(__file__).parent / "static" / "hero.mp4"
+# 처음 온 사람에게 쓰는 법을 보여 주는 소개 영상 (첫 화면 맨 위에 둔다)
+INTRO_VIDEO = Path(__file__).parent / "static" / "소개영상.mp4"
 
 LANDING_STYLE = """
 <style>
@@ -230,6 +232,8 @@ LANDING_STYLE = """
 [data-testid="stHeader"] { background: transparent; }
 .landing, .landing *, .st-key-start button, .st-key-start button * { font-family: "Parkdahyeon", sans-serif; }
 .landing { text-align: center; max-width: 960px; margin: 0 auto; }
+.st-key-intro { max-width: 960px; margin: 2vh auto 0; }
+.st-key-intro video { border-radius: 16px; border: 1px solid rgba(239, 85, 147, 0.4); }
 .st-key-hero {
   position: relative; isolation: isolate; overflow: hidden; justify-content: center;
   min-height: 78vh; margin-top: 2vh; padding: 6vh 24px; border-radius: 28px;
@@ -308,6 +312,12 @@ def show_landing():
     # 색과 글꼴은 첫 화면에만 입힌다. 기능 화면은 원래 모양 그대로 둔다
     # 글 덩어리 사이에 빈 줄이나 앞쪽 띄어쓰기가 있으면 글로 찍혀 나오므로 한 줄로 이어 붙인다
     st.markdown(LANDING_STYLE, unsafe_allow_html=True)
+
+    # 소개 영상 : 첫 화면 맨 위에 두어, 처음 온 사람이 재생 단추를 눌러 바로 볼 수 있게 한다
+    # 영상 파일이 없으면 이 자리는 비워 두고 첫 화면은 원래대로 보인다
+    if INTRO_VIDEO.exists():
+        with st.container(key="intro"):
+            st.video(str(INTRO_VIDEO))
 
     # 히어로 영역 : 배경 영상 위에 큰 제목 · 한 줄 소개 · 시작하기 버튼을 올린다
     with st.container(key="hero"):
