@@ -313,11 +313,12 @@ def show_landing():
     # 글 덩어리 사이에 빈 줄이나 앞쪽 띄어쓰기가 있으면 글로 찍혀 나오므로 한 줄로 이어 붙인다
     st.markdown(LANDING_STYLE, unsafe_allow_html=True)
 
-    # 소개 영상 : 첫 화면 맨 위에 두어, 처음 온 사람이 재생 단추를 눌러 바로 볼 수 있게 한다
+    # 소개 영상 : 첫 화면 맨 위에 두고, 들어오자마자 저절로 재생되게 한다
+    # 인터넷 창은 소리가 나는 영상의 자동 재생을 막으므로 소리를 끈 채로 시작한다 (재생 막대에서 소리를 켤 수 있다)
     # 영상 파일이 없으면 이 자리는 비워 두고 첫 화면은 원래대로 보인다
     if INTRO_VIDEO.exists():
         with st.container(key="intro"):
-            st.video(str(INTRO_VIDEO))
+            st.video(str(INTRO_VIDEO), autoplay=True, muted=True)
 
     # 히어로 영역 : 배경 영상 위에 큰 제목 · 한 줄 소개 · 시작하기 버튼을 올린다
     with st.container(key="hero"):
